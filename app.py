@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 from datetime import date
+import matplotlib.pyplot as plt
 
 # ===============================
 # CONFIGURAÇÕES DE ARQUIVO
@@ -27,15 +28,15 @@ def carregar_registros():
     if os.path.exists(REGISTROS_FILE):
         return pd.read_csv(REGISTROS_FILE)
     return pd.DataFrame(columns=[
-        "Data", "Corridas", "Ganho (R$)",
-        "Meta diária", "Aproveitamento (%)", "Status"
+        "Data", "Corridas", "Ganho Calculado (R$)", "Ganho Real (R$)",
+        "Meta diária (R$)", "Aproveitamento (%)", "Status"
     ])
 
 def salvar_registros(df):
     df.to_csv(REGISTROS_FILE, index=False)
 
 # ===============================
-# ESTILO VISUAL
+# CONFIGURAÇÃO DA PÁGINA
 # ===============================
 st.set_page_config(page_title="MotoFlow", layout="wide")
 
@@ -61,11 +62,11 @@ st.title("🏍️ MotoFlow – Planejamento Financeiro do Motoboy")
 st.sidebar.header("⚙️ Configurações")
 
 valor_corrida = st.sidebar.number_input(
-    "Valor médio por corrida (R$)", 1.0, 50.0, 7.0
+    "Valor médio por corrida (R$)", min_value=1.0, max_value=50.0, value=7.0
 )
 
 dias_trabalho = st.sidebar.number_input(
-    "Dias trabalhados no mês", 1, 31, 30
+    "Dias trabalhados no mês", min_value=1, max_value=31, value=30
 )
 
 # ===============================
@@ -77,7 +78,7 @@ df_despesas = carregar_despesas()
 
 with st.sidebar.form("form_despesa"):
     nome = st.text_input("Nome da despesa")
-    valor = st.number_input("Valor (R$)", 0.0, 10000.0)
+    valor = st.number_input("Valor (R$)", min_value=0.0, max_value=10000.0)
     adicionar = st.form_submit_button("Adicionar")
 
     if adicionar and nome:
@@ -93,6 +94,7 @@ despesas_totais = df_despesas["Valor"].sum() if not df_despesas.empty else 0
 # ===============================
 corridas_mes = despesas_totais / valor_corrida if valor_corrida > 0 else 0
 corridas_dia_meta = corridas_mes / dias_trabalho if dias_trabalho > 0 else 0
+meta_diaria_reais = despesas_totais / dias_trabalho if dias_trabalho > 0 else 0
 
 # ===============================
 # ABAS
@@ -107,7 +109,7 @@ with tab1:
 
     col1.metric("💰 Despesas Totais", f"R$ {despesas_totais:,.2f}")
     col2.metric("📆 Corridas/mês", f"{corridas_mes:.0f}")
-    col3.metric("🎯 Meta diária", f"{corridas_dia_meta:.1f}")
+    col3.metric("🎯 Meta diária (corridas)", f"{corridas_dia_meta:.1f}")
 
     st.subheader("📋 Despesas")
     st.dataframe(df_despesas, use_container_width=True)
@@ -123,26 +125,29 @@ with tab2:
     with st.form("form_registro"):
         data = st.date_input("Data", value=date.today())
         corridas_feitas = st.number_input("Corridas realizadas", 0, 300)
+        ganho_real = st.number_input("Ganho real do dia (R$)", 0.0, 10000.0)
         salvar = st.form_submit_button("Salvar registro")
 
         if salvar:
-            ganho_dia = corridas_feitas * valor_corrida
+            ganho_calculado = corridas_feitas * valor_corrida
+
             aproveitamento = (
-                corridas_feitas / corridas_dia_meta * 100
-                if corridas_dia_meta > 0 else 0
+                (ganho_real / meta_diaria_reais * 100)
+                if meta_diaria_reais > 0 else 0
             )
 
             status = (
-                "🟢 Dentro da meta"
-                if corridas_feitas >= corridas_dia_meta
+                "🟢 Acima da meta"
+                if ganho_real >= meta_diaria_reais
                 else "🔴 Abaixo da meta"
             )
 
             novo = pd.DataFrame([{
                 "Data": data,
                 "Corridas": corridas_feitas,
-                "Ganho (R$)": ganho_dia,
-                "Meta diária": round(corridas_dia_meta, 1),
+                "Ganho Calculado (R$)": ganho_calculado,
+                "Ganho Real (R$)": ganho_real,
+                "Meta diária (R$)": round(meta_diaria_reais, 2),
                 "Aproveitamento (%)": round(aproveitamento, 1),
                 "Status": status
             }])
@@ -163,9 +168,28 @@ with tab3:
     if not df_registros.empty:
         st.dataframe(df_registros, use_container_width=True)
 
-        st.metric(
-            "💵 Total ganho",
-            f"R$ {df_registros['Ganho (R$)'].sum():,.2f}"
+        col1, col2 = st.columns(2)
+        col1.metric(
+            "💵 Total ganho calculado",
+            f"R$ {df_registros['Ganho Calculado (R$)'].sum():,.2f}"
         )
+        col2.metric(
+            "💵 Total ganho real",
+            f"R$ {df_registros['Ganho Real (R$)'].sum():,.2f}"
+        )
+
+        st.subheader("📊 Meta vs Ganho Real")
+        st.bar_chart(
+            df_registros.set_index("Data")[["Meta diária (R$)", "Ganho Real (R$)"]]
+        )
+
+        st.subheader("🥧 Distribuição de Status")
+        fig, ax = plt.subplots()
+        df_registros["Status"].value_counts().plot.pie(
+            autopct="%1.1f%%", ax=ax
+        )
+        ax.set_ylabel("")
+        st.pyplot(fig)
+
     else:
         st.info("Nenhum registro encontrado.")
