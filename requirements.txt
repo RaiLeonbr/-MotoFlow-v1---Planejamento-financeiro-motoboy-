@@ -1,5 +1,9 @@
 streamlit
 pandas
-sqlalchemy
+numpy
+matplotlib
 psycopg2-binary
+sqlalchemy
+
+
 
