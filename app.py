@@ -5,27 +5,29 @@ from sqlalchemy import create_engine, text
 import matplotlib.pyplot as plt
 
 # ===============================
-# CONFIGURAÇÃO DA PÁGINA
+# CONFIG STREAMLIT
 # ===============================
-st.set_page_config(page_title="MotoFlow", layout="wide")
+st.set_page_config(
+    page_title="MotoFlow",
+    layout="wide"
+)
 
 # ===============================
-# CONEXÃO COM O BANCO (NEON)
+# CONEXÃO COM BANCO (POSTGRES)
 # ===============================
 @st.cache_resource
 def get_engine():
     return create_engine(
         st.secrets["DATABASE_URL"],
-        pool_pre_ping=True,
-        pool_size=5,
-        max_overflow=0
+        pool_pre_ping=True
     )
+
+engine = get_engine()
 
 # ===============================
 # CRIAÇÃO DAS TABELAS
 # ===============================
 def criar_tabelas():
-    engine = get_engine()
     with engine.begin() as conn:
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS despesas (
@@ -48,36 +50,28 @@ def criar_tabelas():
             );
         """))
 
-@st.cache_resource
-def init_db():
-    criar_tabelas()
-
-init_db()
+criar_tabelas()
 
 # ===============================
-# FUNÇÕES SQL
+# FUNÇÕES DE BANCO
 # ===============================
 def carregar_despesas():
-    engine = get_engine()
     return pd.read_sql(
         "SELECT id, nome AS Despesa, valor AS Valor FROM despesas ORDER BY id",
         engine
     )
 
 def salvar_despesa(nome, valor):
-    engine = get_engine()
     df = pd.DataFrame([{"nome": nome, "valor": valor}])
     df.to_sql("despesas", engine, if_exists="append", index=False)
 
 def carregar_registros():
-    engine = get_engine()
     return pd.read_sql(
         "SELECT * FROM registros ORDER BY data",
         engine
     )
 
 def salvar_registro(data, corridas, ganho_calc, ganho_real, meta, aproveitamento, status):
-    engine = get_engine()
     df = pd.DataFrame([{
         "data": data,
         "corridas": corridas,
@@ -109,7 +103,7 @@ section[data-testid="stSidebar"] { background-color: #020617; }
 st.title("🏍️ MotoFlow – Planejamento Financeiro do Motoboy")
 
 # ===============================
-# SIDEBAR – CONFIGURAÇÕES
+# SIDEBAR
 # ===============================
 st.sidebar.header("⚙️ Configurações")
 
@@ -171,7 +165,7 @@ with tab2:
     st.subheader("🧾 Registro Diário")
 
     with st.form("form_registro"):
-        data = st.date_input("Data", value=date.today())
+        data_registro = st.date_input("Data", value=date.today())
         corridas_feitas = st.number_input("Corridas realizadas", 0, 300)
         ganho_real = st.number_input("Ganho real do dia (R$)", 0.0, 10000.0)
         salvar = st.form_submit_button("Salvar registro")
@@ -183,14 +177,10 @@ with tab2:
                 if meta_diaria_reais > 0 else 0
             )
 
-            status = (
-                "🟢 Acima da meta"
-                if ganho_real >= meta_diaria_reais
-                else "🔴 Abaixo da meta"
-            )
+            status = "🟢 Acima da meta" if ganho_real >= meta_diaria_reais else "🔴 Abaixo da meta"
 
             salvar_registro(
-                data,
+                data_registro,
                 corridas_feitas,
                 ganho_calculado,
                 ganho_real,
