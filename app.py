@@ -5,58 +5,79 @@ from sqlalchemy import create_engine, text
 import matplotlib.pyplot as plt
 
 # ===============================
-# CONEXÃO COM BANCO POSTGRESQL
+# CONFIGURAÇÃO DA PÁGINA
 # ===============================
-engine = create_engine(st.secrets["DATABASE_URL"])
+st.set_page_config(page_title="MotoFlow", layout="wide")
+
+# ===============================
+# CONEXÃO COM O BANCO (NEON)
+# ===============================
+@st.cache_resource
+def get_engine():
+    return create_engine(
+        st.secrets["DATABASE_URL"],
+        pool_pre_ping=True,
+        pool_size=5,
+        max_overflow=0
+    )
 
 # ===============================
 # CRIAÇÃO DAS TABELAS
 # ===============================
 def criar_tabelas():
-    with engine.connect() as conn:
+    engine = get_engine()
+    with engine.begin() as conn:
         conn.execute(text("""
-        CREATE TABLE IF NOT EXISTS despesas (
-            id SERIAL PRIMARY KEY,
-            nome TEXT NOT NULL,
-            valor NUMERIC NOT NULL
-        );
+            CREATE TABLE IF NOT EXISTS despesas (
+                id SERIAL PRIMARY KEY,
+                nome TEXT NOT NULL,
+                valor NUMERIC(10,2) NOT NULL
+            );
         """))
 
         conn.execute(text("""
-        CREATE TABLE IF NOT EXISTS registros (
-            id SERIAL PRIMARY KEY,
-            data DATE NOT NULL,
-            corridas INT,
-            ganho_calculado NUMERIC,
-            ganho_real NUMERIC,
-            meta_diaria NUMERIC,
-            aproveitamento NUMERIC,
-            status TEXT
-        );
+            CREATE TABLE IF NOT EXISTS registros (
+                id SERIAL PRIMARY KEY,
+                data DATE NOT NULL,
+                corridas INT,
+                ganho_calculado NUMERIC(10,2),
+                ganho_real NUMERIC(10,2),
+                meta_diaria NUMERIC(10,2),
+                aproveitamento NUMERIC(5,2),
+                status TEXT
+            );
         """))
 
-criar_tabelas()
+@st.cache_resource
+def init_db():
+    criar_tabelas()
+
+init_db()
 
 # ===============================
 # FUNÇÕES SQL
 # ===============================
 def carregar_despesas():
+    engine = get_engine()
     return pd.read_sql(
         "SELECT id, nome AS Despesa, valor AS Valor FROM despesas ORDER BY id",
         engine
     )
 
 def salvar_despesa(nome, valor):
+    engine = get_engine()
     df = pd.DataFrame([{"nome": nome, "valor": valor}])
     df.to_sql("despesas", engine, if_exists="append", index=False)
 
 def carregar_registros():
+    engine = get_engine()
     return pd.read_sql(
         "SELECT * FROM registros ORDER BY data",
         engine
     )
 
 def salvar_registro(data, corridas, ganho_calc, ganho_real, meta, aproveitamento, status):
+    engine = get_engine()
     df = pd.DataFrame([{
         "data": data,
         "corridas": corridas,
@@ -69,10 +90,8 @@ def salvar_registro(data, corridas, ganho_calc, ganho_real, meta, aproveitamento
     df.to_sql("registros", engine, if_exists="append", index=False)
 
 # ===============================
-# CONFIGURAÇÃO DA PÁGINA
+# ESTILO
 # ===============================
-st.set_page_config(page_title="MotoFlow", layout="wide")
-
 st.markdown("""
 <style>
 .stApp { background-color: #0b0f14; }
@@ -117,6 +136,7 @@ with st.sidebar.form("form_despesa"):
     if adicionar and nome:
         salvar_despesa(nome, valor)
         st.success("Despesa adicionada!")
+        st.rerun()
 
 despesas_totais = df_despesas["Valor"].sum() if not df_despesas.empty else 0
 
@@ -180,6 +200,7 @@ with tab2:
             )
 
             st.success("Registro salvo com sucesso!")
+            st.rerun()
 
 # ===============================
 # RELATÓRIO
