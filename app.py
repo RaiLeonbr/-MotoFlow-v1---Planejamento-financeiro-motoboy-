@@ -1,39 +1,72 @@
 import streamlit as st
 import pandas as pd
-import os
 from datetime import date
+from sqlalchemy import create_engine, text
 import matplotlib.pyplot as plt
 
 # ===============================
-# CONFIGURAÇÕES DE ARQUIVO
+# CONEXÃO COM BANCO POSTGRESQL
 # ===============================
-DATA_PATH = "data"
-DESPESAS_FILE = os.path.join(DATA_PATH, "despesas.csv")
-REGISTROS_FILE = os.path.join(DATA_PATH, "registros.csv")
-
-os.makedirs(DATA_PATH, exist_ok=True)
+engine = create_engine(st.secrets["DATABASE_URL"])
 
 # ===============================
-# FUNÇÕES DE PERSISTÊNCIA
+# CRIAÇÃO DAS TABELAS
+# ===============================
+def criar_tabelas():
+    with engine.connect() as conn:
+        conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS despesas (
+            id SERIAL PRIMARY KEY,
+            nome TEXT NOT NULL,
+            valor NUMERIC NOT NULL
+        );
+        """))
+
+        conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS registros (
+            id SERIAL PRIMARY KEY,
+            data DATE NOT NULL,
+            corridas INT,
+            ganho_calculado NUMERIC,
+            ganho_real NUMERIC,
+            meta_diaria NUMERIC,
+            aproveitamento NUMERIC,
+            status TEXT
+        );
+        """))
+
+criar_tabelas()
+
+# ===============================
+# FUNÇÕES SQL
 # ===============================
 def carregar_despesas():
-    if os.path.exists(DESPESAS_FILE):
-        return pd.read_csv(DESPESAS_FILE)
-    return pd.DataFrame(columns=["Despesa", "Valor"])
+    return pd.read_sql(
+        "SELECT id, nome AS Despesa, valor AS Valor FROM despesas ORDER BY id",
+        engine
+    )
 
-def salvar_despesas(df):
-    df.to_csv(DESPESAS_FILE, index=False)
+def salvar_despesa(nome, valor):
+    df = pd.DataFrame([{"nome": nome, "valor": valor}])
+    df.to_sql("despesas", engine, if_exists="append", index=False)
 
 def carregar_registros():
-    if os.path.exists(REGISTROS_FILE):
-        return pd.read_csv(REGISTROS_FILE)
-    return pd.DataFrame(columns=[
-        "Data", "Corridas", "Ganho Calculado (R$)", "Ganho Real (R$)",
-        "Meta diária (R$)", "Aproveitamento (%)", "Status"
-    ])
+    return pd.read_sql(
+        "SELECT * FROM registros ORDER BY data",
+        engine
+    )
 
-def salvar_registros(df):
-    df.to_csv(REGISTROS_FILE, index=False)
+def salvar_registro(data, corridas, ganho_calc, ganho_real, meta, aproveitamento, status):
+    df = pd.DataFrame([{
+        "data": data,
+        "corridas": corridas,
+        "ganho_calculado": ganho_calc,
+        "ganho_real": ganho_real,
+        "meta_diaria": meta,
+        "aproveitamento": aproveitamento,
+        "status": status
+    }])
+    df.to_sql("registros", engine, if_exists="append", index=False)
 
 # ===============================
 # CONFIGURAÇÃO DA PÁGINA
@@ -62,11 +95,11 @@ st.title("🏍️ MotoFlow – Planejamento Financeiro do Motoboy")
 st.sidebar.header("⚙️ Configurações")
 
 valor_corrida = st.sidebar.number_input(
-    "Valor médio por corrida (R$)", min_value=1.0, max_value=50.0, value=7.0
+    "Valor médio por corrida (R$)", 1.0, 50.0, 7.0
 )
 
 dias_trabalho = st.sidebar.number_input(
-    "Dias trabalhados no mês", min_value=1, max_value=31, value=30
+    "Dias trabalhados no mês", 1, 31, 30
 )
 
 # ===============================
@@ -78,13 +111,11 @@ df_despesas = carregar_despesas()
 
 with st.sidebar.form("form_despesa"):
     nome = st.text_input("Nome da despesa")
-    valor = st.number_input("Valor (R$)", min_value=0.0, max_value=10000.0)
+    valor = st.number_input("Valor (R$)", 0.0, 10000.0)
     adicionar = st.form_submit_button("Adicionar")
 
     if adicionar and nome:
-        novo = pd.DataFrame([{"Despesa": nome, "Valor": valor}])
-        df_despesas = pd.concat([df_despesas, novo], ignore_index=True)
-        salvar_despesas(df_despesas)
+        salvar_despesa(nome, valor)
         st.success("Despesa adicionada!")
 
 despesas_totais = df_despesas["Valor"].sum() if not df_despesas.empty else 0
@@ -106,7 +137,6 @@ tab1, tab2, tab3 = st.tabs(["📊 Dashboard", "🧾 Registrar Dia", "📅 Relat�
 # ===============================
 with tab1:
     col1, col2, col3 = st.columns(3)
-
     col1.metric("💰 Despesas Totais", f"R$ {despesas_totais:,.2f}")
     col2.metric("📆 Corridas/mês", f"{corridas_mes:.0f}")
     col3.metric("🎯 Meta diária (corridas)", f"{corridas_dia_meta:.1f}")
@@ -120,8 +150,6 @@ with tab1:
 with tab2:
     st.subheader("🧾 Registro Diário")
 
-    df_registros = carregar_registros()
-
     with st.form("form_registro"):
         data = st.date_input("Data", value=date.today())
         corridas_feitas = st.number_input("Corridas realizadas", 0, 300)
@@ -130,7 +158,6 @@ with tab2:
 
         if salvar:
             ganho_calculado = corridas_feitas * valor_corrida
-
             aproveitamento = (
                 (ganho_real / meta_diaria_reais * 100)
                 if meta_diaria_reais > 0 else 0
@@ -142,18 +169,15 @@ with tab2:
                 else "🔴 Abaixo da meta"
             )
 
-            novo = pd.DataFrame([{
-                "Data": data,
-                "Corridas": corridas_feitas,
-                "Ganho Calculado (R$)": ganho_calculado,
-                "Ganho Real (R$)": ganho_real,
-                "Meta diária (R$)": round(meta_diaria_reais, 2),
-                "Aproveitamento (%)": round(aproveitamento, 1),
-                "Status": status
-            }])
-
-            df_registros = pd.concat([df_registros, novo], ignore_index=True)
-            salvar_registros(df_registros)
+            salvar_registro(
+                data,
+                corridas_feitas,
+                ganho_calculado,
+                ganho_real,
+                meta_diaria_reais,
+                round(aproveitamento, 1),
+                status
+            )
 
             st.success("Registro salvo com sucesso!")
 
@@ -171,25 +195,23 @@ with tab3:
         col1, col2 = st.columns(2)
         col1.metric(
             "💵 Total ganho calculado",
-            f"R$ {df_registros['Ganho Calculado (R$)'].sum():,.2f}"
+            f"R$ {df_registros['ganho_calculado'].sum():,.2f}"
         )
         col2.metric(
             "💵 Total ganho real",
-            f"R$ {df_registros['Ganho Real (R$)'].sum():,.2f}"
+            f"R$ {df_registros['ganho_real'].sum():,.2f}"
         )
 
         st.subheader("📊 Meta vs Ganho Real")
-        st.bar_chart(
-            df_registros.set_index("Data")[["Meta diária (R$)", "Ganho Real (R$)"]]
-        )
+        chart_df = df_registros.set_index("data")[["meta_diaria", "ganho_real"]]
+        st.bar_chart(chart_df)
 
         st.subheader("🥧 Distribuição de Status")
         fig, ax = plt.subplots()
-        df_registros["Status"].value_counts().plot.pie(
+        df_registros["status"].value_counts().plot.pie(
             autopct="%1.1f%%", ax=ax
         )
         ax.set_ylabel("")
         st.pyplot(fig)
-
     else:
         st.info("Nenhum registro encontrado.")
