@@ -189,7 +189,31 @@ with tab2:
                 meta_diaria_reais,
                 valor_corrida
             )
+
+            # cálculo do aproveitamento do dia
+            aproveitamento_dia = (
+                (ganho_real / meta_diaria_reais) * 100
+                if meta_diaria_reais > 0
+                else 0
+            )
+
             st.success("Registro salvo com sucesso 🚀")
+
+            # gráfico pequeno e controlado
+            col1, col2 = st.columns([1, 2])
+
+            with col1:
+                fig, ax = plt.subplots(figsize=(3.5, 3.5))
+                ax.pie(
+                    [aproveitamento_dia, 100 - aproveitamento_dia],
+                    labels=["Aproveitamento", "Restante"],
+                    autopct="%1.1f%%",
+                    startangle=90
+                )
+                ax.set_title("📊 Aproveitamento do Dia", fontsize=10)
+                ax.axis("equal")
+                st.pyplot(fig)
+
             st.rerun()
 
 # ===============================
