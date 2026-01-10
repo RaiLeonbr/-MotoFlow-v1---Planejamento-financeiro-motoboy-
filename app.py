@@ -221,30 +221,6 @@ with tab3:
             f"R$ {registros_df['Ganho Real'].sum():,.2f}"
         )
 
-        st.subheader("📊 Meta vs Ganho Real")
-        chart_df = registros_df.set_index("Data")[["Meta Diária", "Ganho Real"]]
-        st.bar_chart(chart_df)
-
-with tab3:
-    st.subheader("📅 Relatório")
-
-    df = st.session_state.registros
-
-    if not df.empty:
-        st.dataframe(df, use_container_width=True)
-
-        col1, col2 = st.columns(2)
-        col1.metric(
-            "💵 Total ganho calculado",
-            f"R$ {df['Ganho Calculado'].sum():,.2f}"
-        )
-        col2.metric(
-            "💵 Total ganho real",
-            f"R$ {df['Ganho Real'].sum():,.2f}"
-        )
-        st.subheader("📊 Meta vs Ganho Real")
-        chart_df = df.set_index("Data")[["Meta Diária", "Ganho Real"]]
-        st.bar_chart(chart_df)
         
 
 
