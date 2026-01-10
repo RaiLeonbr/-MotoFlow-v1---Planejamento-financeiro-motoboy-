@@ -1,15 +1,70 @@
+# ===============================
+# IMPORTAÇÕES E BIBLIOTECAS
+# ===============================
+import os
 import streamlit as st
 import pandas as pd
 from datetime import date
 import matplotlib.pyplot as plt
 
 # ===============================
+# CAMINHOS DOS ARQUIVOS
+# ===============================
+CAMINHO_REGISTROS = "data/registros.csv"
+CAMINHO_DESPESAS = "data/despesas.csv"
+
+# ===============================
+# FUNÇÕES DE PERSISTÊNCIA
+# ===============================
+def salvar_registro(data, corridas, ganho_real, meta_diaria, valor_corrida):
+    ganho_calculado = corridas * valor_corrida
+    aproveitamento = (ganho_real / meta_diaria) * 100 if meta_diaria > 0 else 0
+    status = "🟢 Acima da meta" if ganho_real >= meta_diaria else "🔴 Abaixo da meta"
+
+    novo = pd.DataFrame([{
+        "Data": data,
+        "Corridas": corridas,
+        "Ganho Calculado": ganho_calculado,
+        "Ganho Real": ganho_real,
+        "Meta Diária": meta_diaria,
+        "Aproveitamento (%)": round(aproveitamento, 1),
+        "Status": status
+    }])
+
+    if os.path.exists(CAMINHO_REGISTROS):
+        df = pd.read_csv(CAMINHO_REGISTROS)
+        df = pd.concat([df, novo], ignore_index=True)
+    else:
+        df = novo
+
+    df.to_csv(CAMINHO_REGISTROS, index=False)
+
+
+def salvar_despesa(data, nome, valor):
+    nova = pd.DataFrame([{
+        "Data": data,
+        "Despesa": nome,
+        "Valor": valor
+    }])
+
+    if os.path.exists(CAMINHO_DESPESAS):
+        df = pd.read_csv(CAMINHO_DESPESAS)
+        df = pd.concat([df, nova], ignore_index=True)
+    else:
+        df = nova
+
+    df.to_csv(CAMINHO_DESPESAS, index=False)
+
+
+def carregar_csv(caminho, colunas):
+    if os.path.exists(caminho):
+        return pd.read_csv(caminho)
+    return pd.DataFrame(columns=colunas)
+
+# ===============================
 # CONFIGURAÇÃO DA PÁGINA
 # ===============================
-st.set_page_config(
-    page_title="MotoFlow",
-    layout="wide"
-)
+st.set_page_config(page_title="MotoFlow", layout="wide")
 
 st.markdown("""
 <style>
@@ -28,25 +83,21 @@ section[data-testid="stSidebar"] { background-color: #020617; }
 st.title("🏍️ MotoFlow – Planejamento Financeiro do Motoboy")
 
 # ===============================
-# ESTADO INICIAL
+# CARREGAMENTO INICIAL
 # ===============================
-if "despesas" not in st.session_state:
-    st.session_state.despesas = pd.DataFrame(
-        columns=["Despesa", "Valor"]
-    )
+despesas_df = carregar_csv(
+    CAMINHO_DESPESAS,
+    ["Data", "Despesa", "Valor"]
+)
 
-if "registros" not in st.session_state:
-    st.session_state.registros = pd.DataFrame(
-        columns=[
-            "Data",
-            "Corridas",
-            "Ganho Calculado",
-            "Ganho Real",
-            "Meta Diária",
-            "Aproveitamento (%)",
-            "Status"
-        ]
-    )
+registros_df = carregar_csv(
+    CAMINHO_REGISTROS,
+    [
+        "Data", "Corridas", "Ganho Calculado",
+        "Ganho Real", "Meta Diária",
+        "Aproveitamento (%)", "Status"
+    ]
+)
 
 # ===============================
 # SIDEBAR – CONFIGURAÇÕES
@@ -67,24 +118,17 @@ dias_trabalho = st.sidebar.number_input(
 st.sidebar.subheader("💸 Despesas Mensais")
 
 with st.sidebar.form("form_despesa"):
+    data_despesa = st.date_input("Data", value=date.today())
     nome = st.text_input("Nome da despesa")
     valor = st.number_input("Valor (R$)", 0.0, 10000.0)
     adicionar = st.form_submit_button("Adicionar")
 
     if adicionar and nome:
-        nova = pd.DataFrame(
-            [{"Despesa": nome, "Valor": valor}]
-        )
-        st.session_state.despesas = pd.concat(
-            [st.session_state.despesas, nova],
-            ignore_index=True
-        )
-        st.success("Despesa adicionada!")
+        salvar_despesa(data_despesa, nome, valor)
+        st.success("Despesa salva com sucesso 💾")
+        st.rerun()
 
-despesas_totais = (
-    st.session_state.despesas["Valor"].sum()
-    if not st.session_state.despesas.empty else 0
-)
+despesas_totais = despesas_df["Valor"].sum() if not despesas_df.empty else 0
 
 # ===============================
 # CÁLCULOS
@@ -111,10 +155,7 @@ with tab1:
     col3.metric("🎯 Meta diária (corridas)", f"{corridas_dia_meta:.1f}")
 
     st.subheader("📋 Despesas")
-    st.dataframe(
-        st.session_state.despesas,
-        use_container_width=True
-    )
+    st.dataframe(despesas_df, use_container_width=True)
 
 # ===============================
 # REGISTRO DIÁRIO
@@ -124,44 +165,20 @@ with tab2:
 
     with st.form("form_registro"):
         data = st.date_input("Data", value=date.today())
-        corridas_feitas = st.number_input(
-            "Corridas realizadas", 0, 300
-        )
-        ganho_real = st.number_input(
-            "Ganho real do dia (R$)", 0.0, 10000.0
-        )
+        corridas_feitas = st.number_input("Corridas realizadas", 0, 300)
+        ganho_real = st.number_input("Ganho real do dia (R$)", 0.0, 10000.0)
         salvar = st.form_submit_button("Salvar registro")
 
         if salvar:
-            ganho_calculado = corridas_feitas * valor_corrida
-
-            aproveitamento = (
-                (ganho_real / meta_diaria_reais) * 100
-                if meta_diaria_reais > 0 else 0
+            salvar_registro(
+                data,
+                corridas_feitas,
+                ganho_real,
+                meta_diaria_reais,
+                valor_corrida
             )
-
-            status = (
-                "🟢 Acima da meta"
-                if ganho_real >= meta_diaria_reais
-                else "🔴 Abaixo da meta"
-            )
-
-            novo = pd.DataFrame([{
-                "Data": data,
-                "Corridas": corridas_feitas,
-                "Ganho Calculado": ganho_calculado,
-                "Ganho Real": ganho_real,
-                "Meta Diária": meta_diaria_reais,
-                "Aproveitamento (%)": round(aproveitamento, 1),
-                "Status": status
-            }])
-
-            st.session_state.registros = pd.concat(
-                [st.session_state.registros, novo],
-                ignore_index=True
-            )
-
-            st.success("Registro salvo com sucesso!")
+            st.success("Registro salvo com sucesso 🚀")
+            st.rerun()
 
 # ===============================
 # RELATÓRIO + GRÁFICOS
@@ -169,37 +186,30 @@ with tab2:
 with tab3:
     st.subheader("📅 Relatório")
 
-    df = st.session_state.registros
-
-    if not df.empty:
-        st.dataframe(df, use_container_width=True)
+    if not registros_df.empty:
+        st.dataframe(registros_df, use_container_width=True)
 
         col1, col2 = st.columns(2)
         col1.metric(
             "💵 Total ganho calculado",
-            f"R$ {df['Ganho Calculado'].sum():,.2f}"
+            f"R$ {registros_df['Ganho Calculado'].sum():,.2f}"
         )
         col2.metric(
             "💵 Total ganho real",
-            f"R$ {df['Ganho Real'].sum():,.2f}"
+            f"R$ {registros_df['Ganho Real'].sum():,.2f}"
         )
 
-        # 🔹 GRÁFICO DE BARRAS
         st.subheader("📊 Meta vs Ganho Real")
-        chart_df = df.set_index("Data")[
-            ["Meta Diária", "Ganho Real"]
-        ]
+        chart_df = registros_df.set_index("Data")[["Meta Diária", "Ganho Real"]]
         st.bar_chart(chart_df)
 
-        # 🔹 GRÁFICO DE PIZZA
         st.subheader("🥧 Distribuição de Resultados")
         fig, ax = plt.subplots()
-        df["Status"].value_counts().plot.pie(
+        registros_df["Status"].value_counts().plot.pie(
             autopct="%1.1f%%",
             ax=ax
         )
         ax.set_ylabel("")
         st.pyplot(fig)
-
     else:
         st.info("Nenhum registro encontrado.")
