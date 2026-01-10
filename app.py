@@ -239,25 +239,4 @@ with tab3:
         chart_df = registros_df.set_index("Data")[["Meta Diária", "Ganho Real"]]
         st.bar_chart(chart_df)
 
-        st.subheader("📊 Aproveitamento Médio")
-
-# cálculo seguro
-aproveitamento = (
-    registros_df["Aproveitamento (%)"].mean()
-    if not registros_df.empty
-    else 0
-)
-
-fig, ax = plt.subplots(figsize=(4, 4))
-
-ax.pie(
-    [aproveitamento, 100 - aproveitamento],
-    labels=["Aproveitamento", "Restante"],
-    autopct="%1.1f%%",
-    startangle=90
-)
-
-ax.set_title("Status da Meta (Média)")
-ax.axis("equal")
-
-st.pyplot(fig)
+        
