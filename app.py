@@ -215,6 +215,7 @@ with tab2:
                 st.pyplot(fig)
 
             st.rerun()
+            
 
 # ===============================
 # RELATÓRIO + GRÁFICOS
@@ -238,5 +239,38 @@ with tab3:
         st.subheader("📊 Meta vs Ganho Real")
         chart_df = registros_df.set_index("Data")[["Meta Diária", "Ganho Real"]]
         st.bar_chart(chart_df)
+
+    # 1️⃣ Totais do dia
+total_registros = len(registros_df)
+
+# Ajuste conforme a sua regra de sucesso
+registros_positivos = len(
+    registros_df[registros_df["Status"] == "Lucro"]
+)
+
+# 2️⃣ Cálculo do aproveitamento (SEMPRE antes do gráfico)
+if total_registros > 0:
+    aproveitamento_dia = (registros_positivos / total_registros) * 100
+else:
+    aproveitamento_dia = 0
+
+# 3️⃣ Proteção extra (boa prática)
+aproveitamento_dia = max(0, min(aproveitamento_dia, 100))
+
+# 4️⃣ Gráfico
+fig, ax = plt.subplots(figsize=(4, 4))
+
+ax.pie(
+    [aproveitamento_dia, 100 - aproveitamento_dia],
+    labels=["Aproveitamento", "Restante"],
+    autopct="%1.1f%%",
+    startangle=90
+)
+
+ax.set_title("📊 Aproveitamento Diário")
+ax.axis("equal")
+
+st.pyplot(fig)
+
 
         
