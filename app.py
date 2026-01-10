@@ -7,6 +7,12 @@ import pandas as pd
 from datetime import date
 import matplotlib.pyplot as plt
 
+def garantir_pasta(caminho_arquivo):
+    pasta = os.path.dirname(caminho_arquivo)
+    if pasta and not os.path.exists(pasta):
+        os.makedirs(pasta)
+
+
 # ===============================
 # CAMINHOS DOS ARQUIVOS
 # ===============================
@@ -40,20 +46,32 @@ def salvar_registro(data, corridas, ganho_real, meta_diaria, valor_corrida):
     df.to_csv(CAMINHO_REGISTROS, index=False)
 
 
-def salvar_despesa(data, nome, valor):
-    nova = pd.DataFrame([{
+def salvar_registro(data, corridas, ganho_real, meta_diaria, valor_corrida):
+    garantir_pasta(CAMINHO_REGISTROS)
+
+    ganho_calculado = corridas * valor_corrida
+    aproveitamento = (ganho_real / meta_diaria) * 100 if meta_diaria > 0 else 0
+    status = "🟢 Acima da meta" if ganho_real >= meta_diaria else "🔴 Abaixo da meta"
+
+    novo = pd.DataFrame([{
         "Data": data,
-        "Despesa": nome,
-        "Valor": valor
+        "Corridas": corridas,
+        "Ganho Calculado": ganho_calculado,
+        "Ganho Real": ganho_real,
+        "Meta Diária": meta_diaria,
+        "Aproveitamento (%)": round(aproveitamento, 1),
+        "Status": status
     }])
 
-    if os.path.exists(CAMINHO_DESPESAS):
-        df = pd.read_csv(CAMINHO_DESPESAS)
-        df = pd.concat([df, nova], ignore_index=True)
+    if os.path.exists(CAMINHO_REGISTROS):
+        df = pd.read_csv(CAMINHO_REGISTROS)
+        df = pd.concat([df, novo], ignore_index=True)
     else:
-        df = nova
+        df = novo
 
-    df.to_csv(CAMINHO_DESPESAS, index=False)
+    df.to_csv(CAMINHO_REGISTROS, index=False)
+
+
 
 
 def carregar_csv(caminho, colunas):
