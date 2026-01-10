@@ -7,11 +7,13 @@ import pandas as pd
 from datetime import date
 import matplotlib.pyplot as plt
 
+# ===============================
+# FUNÇÃO UTILITÁRIA
+# ===============================
 def garantir_pasta(caminho_arquivo):
     pasta = os.path.dirname(caminho_arquivo)
     if pasta and not os.path.exists(pasta):
         os.makedirs(pasta)
-
 
 # ===============================
 # CAMINHOS DOS ARQUIVOS
@@ -22,28 +24,22 @@ CAMINHO_DESPESAS = "data/despesas.csv"
 # ===============================
 # FUNÇÕES DE PERSISTÊNCIA
 # ===============================
-def salvar_registro(data, corridas, ganho_real, meta_diaria, valor_corrida):
-    ganho_calculado = corridas * valor_corrida
-    aproveitamento = (ganho_real / meta_diaria) * 100 if meta_diaria > 0 else 0
-    status = "🟢 Acima da meta" if ganho_real >= meta_diaria else "🔴 Abaixo da meta"
+def salvar_despesa(data, nome, valor):
+    garantir_pasta(CAMINHO_DESPESAS)
 
-    novo = pd.DataFrame([{
+    nova = pd.DataFrame([{
         "Data": data,
-        "Corridas": corridas,
-        "Ganho Calculado": ganho_calculado,
-        "Ganho Real": ganho_real,
-        "Meta Diária": meta_diaria,
-        "Aproveitamento (%)": round(aproveitamento, 1),
-        "Status": status
+        "Despesa": nome,
+        "Valor": valor
     }])
 
-    if os.path.exists(CAMINHO_REGISTROS):
-        df = pd.read_csv(CAMINHO_REGISTROS)
-        df = pd.concat([df, novo], ignore_index=True)
+    if os.path.exists(CAMINHO_DESPESAS):
+        df = pd.read_csv(CAMINHO_DESPESAS)
+        df = pd.concat([df, nova], ignore_index=True)
     else:
-        df = novo
+        df = nova
 
-    df.to_csv(CAMINHO_REGISTROS, index=False)
+    df.to_csv(CAMINHO_DESPESAS, index=False)
 
 
 def salvar_registro(data, corridas, ganho_real, meta_diaria, valor_corrida):
@@ -70,8 +66,6 @@ def salvar_registro(data, corridas, ganho_real, meta_diaria, valor_corrida):
         df = novo
 
     df.to_csv(CAMINHO_REGISTROS, index=False)
-
-
 
 
 def carregar_csv(caminho, colunas):
