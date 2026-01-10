@@ -95,7 +95,7 @@ section[data-testid="stSidebar"] { background-color: #020617; }
 st.title("🏍️ MotoFlow – Planejamento Financeiro do Motoboy")
 
 # ===============================
-# CARREGAMENTO INICIAL
+# CARREGAMENTO DOS DADOS
 # ===============================
 despesas_df = carregar_csv(
     CAMINHO_DESPESAS,
@@ -189,18 +189,8 @@ with tab2:
                 meta_diaria_reais,
                 valor_corrida
             )
-
-            # cálculo do aproveitamento do dia
-            aproveitamento_dia = (
-                (ganho_real / meta_diaria_reais) * 100
-                if meta_diaria_reais > 0
-                else 0
-            )
-
             st.success("Registro salvo com sucesso 🚀")
-
-            
-            
+            st.rerun()
 
 # ===============================
 # RELATÓRIO + GRÁFICOS
@@ -221,9 +211,8 @@ with tab3:
             f"R$ {registros_df['Ganho Real'].sum():,.2f}"
         )
 
-        
-
-
-    
-
-        
+        st.subheader("📊 Meta vs Ganho Real")
+        chart_df = registros_df.set_index("Data")[["Meta Diária", "Ganho Real"]]
+        st.bar_chart(chart_df)
+    else:
+        st.info("Nenhum registro encontrado.")
