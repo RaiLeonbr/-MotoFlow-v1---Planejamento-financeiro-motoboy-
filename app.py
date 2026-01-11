@@ -1,23 +1,14 @@
-# ===============================
-# IMPORTAÇÕES
-# ===============================
 import streamlit as st
 import pandas as pd
 from datetime import date
 from sqlalchemy import create_engine
 
-# ===============================
-# CONFIGURAÇÃO DA PÁGINA
-# ===============================
 st.set_page_config(
     page_title="MotoFlow",
     page_icon="🏍️",
     layout="wide"
 )
 
-# ===============================
-# ESTILO
-# ===============================
 st.markdown("""
 <style>
 .stApp { background-color: #0b0f14; }
@@ -32,15 +23,11 @@ section[data-testid="stSidebar"] { background-color: #020617; }
 </style>
 """, unsafe_allow_html=True)
 
-# ===============================
-# CONEXÃO SQL SERVER
-# ===============================
 def get_engine():
     server = "localhost"
     database = "MotoFlowDB"
-    username = "sa"          # ALTERE SE NECESSÁRIO
-    password = "SENHA"       # ALTERE AQUI
-
+    username = "sa"
+    password = "SENHA"
     connection_string = (
         f"mssql+pyodbc://{username}:{password}"
         f"@{server}/{database}"
@@ -48,124 +35,127 @@ def get_engine():
     )
     return create_engine(connection_string)
 
-# ===============================
-# FUNÇÕES DE BANCO
-# ===============================
 def carregar_registros():
     try:
         engine = get_engine()
-        query = "SELECT * FROM registros ORDER BY data DESC"
-        return pd.read_sql(query, engine)
+        return pd.read_sql(
+            "SELECT * FROM registros ORDER BY data DESC",
+            engine
+        )
     except:
         return pd.DataFrame(columns=[
-            "data", "corridas",
-            "ganho_calculado", "ganho_real",
-            "meta_diaria", "aproveitamento", "status"
+            "data", "corridas", "ganho_calculado",
+            "ganho_real", "meta_diaria",
+            "aproveitamento", "status"
         ])
 
 def salvar_registro(df):
     engine = get_engine()
     df.to_sql("registros", engine, if_exists="append", index=False)
 
-# ===============================
-# HEADER
-# ===============================
+def carregar_despesas():
+    try:
+        engine = get_engine()
+        return pd.read_sql(
+            "SELECT * FROM despesas ORDER BY data DESC",
+            engine
+        )
+    except:
+        return pd.DataFrame(columns=["data", "descricao", "valor"])
+
+def salvar_despesa(df):
+    engine = get_engine()
+    df.to_sql("despesas", engine, if_exists="append", index=False)
+
 st.title("🏍️ MotoFlow")
 st.caption("Planejamento financeiro inteligente para motoboy")
 
-# ===============================
-# SIDEBAR – CONFIGURAÇÕES
-# ===============================
 st.sidebar.header("⚙️ Configurações")
 
 valor_corrida = st.sidebar.number_input(
-    "Valor médio por corrida (R$)",
-    min_value=1.0,
-    max_value=50.0,
-    value=7.0
+    "Valor médio por corrida (R$)", 1.0, 50.0, 7.0
 )
 
 dias_trabalho = st.sidebar.number_input(
-    "Dias trabalhados no mês",
-    min_value=1,
-    max_value=31,
-    value=30
+    "Dias trabalhados no mês", 1, 31, 30
 )
 
-# ===============================
-# CARREGAR DADOS
-# ===============================
-registros_df = carregar_registros()
+st.sidebar.subheader("💸 Adicionar Despesa")
 
-# ===============================
-# CARDS PRINCIPAIS
-# ===============================
+with st.sidebar.form("form_despesa"):
+    data_despesa = st.date_input("Data", value=date.today())
+    descricao = st.text_input("Descrição")
+    valor = st.number_input("Valor (R$)", 0.0, 10000.0)
+    salvar_desp = st.form_submit_button("Salvar")
+
+if salvar_desp and descricao:
+    nova = pd.DataFrame([{
+        "data": data_despesa,
+        "descricao": descricao,
+        "valor": valor
+    }])
+    salvar_despesa(nova)
+    st.sidebar.success("Despesa salva 💾")
+    st.rerun()
+
+registros_df = carregar_registros()
+despesas_df = carregar_despesas()
+
 if registros_df.empty:
     st.warning("Ainda não há dados suficientes para exibir os indicadores.")
 else:
-    col1, col2, col3 = st.columns(3)
-
-    col1.metric(
+    c1, c2, c3 = st.columns(3)
+    c1.metric(
         "💰 Total ganho calculado",
         f"R$ {registros_df['ganho_calculado'].sum():,.2f}"
     )
-    col2.metric(
+    c2.metric(
         "💰 Total ganho real",
         f"R$ {registros_df['ganho_real'].sum():,.2f}"
     )
-    col3.metric(
+    c3.metric(
         "📊 Aproveitamento médio",
         f"{registros_df['aproveitamento'].mean():.1f}%"
     )
 
-# ===============================
-# ABAS
-# ===============================
 tab1, tab2, tab3 = st.tabs(
     ["📊 Dashboard", "🧾 Registrar Dia", "📅 Relatório"]
 )
 
-# ===============================
-# DASHBOARD
-# ===============================
 with tab1:
-    st.subheader("📊 Visão Geral")
+    despesas_totais = despesas_df["valor"].sum() if not despesas_df.empty else 0
+    c1, c2, c3 = st.columns(3)
+    c1.metric("💸 Despesas Totais", f"R$ {despesas_totais:,.2f}")
+    c2.metric(
+        "💰 Ganho Total",
+        f"R$ {registros_df['ganho_real'].sum():,.2f}"
+        if not registros_df.empty else "R$ 0,00"
+    )
+    meta_mensal = (
+        registros_df["meta_diaria"].mean() * dias_trabalho
+        if not registros_df.empty else 0
+    )
+    c3.metric("🎯 Meta Mensal Estimada", f"R$ {meta_mensal:,.2f}")
 
-    if not registros_df.empty:
-        col1, col2 = st.columns(2)
-
-        col1.metric(
-            "💰 Ganho Total",
-            f"R$ {registros_df['ganho_real'].sum():,.2f}"
-        )
-
-        meta_mensal = registros_df["meta_diaria"].mean() * dias_trabalho
-        col2.metric("🎯 Meta Mensal Estimada", f"R$ {meta_mensal:,.2f}")
-
-        st.dataframe(registros_df, use_container_width=True)
-
-# ===============================
-# REGISTRO DIÁRIO
-# ===============================
 with tab2:
-    st.subheader("🧾 Registro Diário")
-
     with st.form("form_registro"):
         data = st.date_input("Data", value=date.today())
         corridas = st.number_input("Corridas realizadas", 0, 300)
         ganho_real = st.number_input("Ganho real do dia (R$)", 0.0, 10000.0)
-        salvar = st.form_submit_button("Salvar Registro")
+        salvar_reg = st.form_submit_button("Salvar Registro")
 
-    if salvar:
+    if salvar_reg:
         ganho_calculado = corridas * valor_corrida
-        meta_diaria = ganho_calculado if dias_trabalho > 0 else 0
-
+        meta_diaria = ganho_calculado
         aproveitamento = (
             (ganho_real / meta_diaria) * 100
             if meta_diaria > 0 else 0
         )
-
-        status = "🟢 Acima da meta" if ganho_real >= meta_diaria else "🔴 Abaixo da meta"
+        status = (
+            "🟢 Acima da meta"
+            if ganho_real >= meta_diaria
+            else "🔴 Abaixo da meta"
+        )
 
         novo = pd.DataFrame([{
             "data": data,
@@ -181,19 +171,13 @@ with tab2:
         st.success("Registro salvo com sucesso 🚀")
         st.rerun()
 
-# ===============================
-# RELATÓRIO
-# ===============================
 with tab3:
-    st.subheader("📅 Relatório Geral")
-
     if not registros_df.empty:
         st.dataframe(registros_df, use_container_width=True)
-
-        st.subheader("📊 Meta vs Ganho Real")
-        chart_df = registros_df.set_index("data")[["meta_diaria", "ganho_real"]]
+        chart_df = registros_df.set_index("data")[[
+            "meta_diaria", "ganho_real"
+        ]]
         st.bar_chart(chart_df)
-
         csv = registros_df.to_csv(index=False).encode("utf-8")
         st.download_button(
             "📥 Baixar relatório CSV",
