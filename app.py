@@ -23,16 +23,20 @@ section[data-testid="stSidebar"] { background-color: #020617; }
 </style>
 """, unsafe_allow_html=True)
 
+# ===============================
+# CONEXÃO SQL SERVER (Windows Authentication)
+# ===============================
 def get_engine():
     server = "localhost"
     database = "MotoFlowDB"
-    username = "sa"
-    password = "SENHA"
+
     connection_string = (
-        f"mssql+pyodbc://{username}:{password}"
-        f"@{server}/{database}"
+        "mssql+pyodbc://@"
+        f"{server}/{database}"
         "?driver=ODBC Driver 17 for SQL Server"
+        "&trusted_connection=yes"
     )
+
     return create_engine(connection_string)
 
 def carregar_registros():
