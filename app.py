@@ -216,3 +216,151 @@ with tab3:
         st.bar_chart(chart_df)
     else:
         st.info("Nenhum registro encontrado.")
+
+from components import card
+
+
+# ====== CARREGAR DADOS ======
+df = pd.read_csv("data.csv")
+
+# ====== MÉTRICAS ======
+km_total = df["km"].sum()
+consumo_medio = (df["km"].sum() / df["litros"].sum())
+gasto_total = df["valor"].sum()
+manutencoes = df[df["tipo"] == "manutencao"].shape[0]
+
+# ====== CARDS ======
+col1, col2, col3, col4 = st.columns(4)
+
+with col1:
+    card("Km Rodados", f"{km_total:.0f} km", "📏", "#0f172a")
+
+with col2:
+    card("Consumo Médio", f"{consumo_medio:.1f} km/l", "⛽", "#064e3b")
+
+with col3:
+    card("Gasto Total", f"R$ {gasto_total:,.2f}", "💰", "#7c2d12")
+
+with col4:
+    card("Manutenções", manutencoes, "🛠️", "#1e293b")
+
+st.subheader("📈 Evolução de Km Rodados")
+
+df["data"] = pd.to_datetime(df["data"])
+
+st.line_chart(
+    df.groupby("data")["km"].sum()
+)
+
+st.subheader("💰 Gastos ao Longo do Tempo")
+
+st.bar_chart(
+    df.groupby("data")["valor"].sum()
+)
+
+
+
+st.title("🏍️ MotoFlow")
+st.caption("Controle inteligente da sua moto")
+
+ARQUIVO = "motoflow_dados.csv"
+
+# ===============================
+# CRIAR CSV SE NÃO EXISTIR
+# ===============================
+if not os.path.exists(ARQUIVO):
+    df_inicial = pd.DataFrame(columns=[
+        "data", "km", "litros", "valor", "tipo", "descricao"
+    ])
+    df_inicial.to_csv(ARQUIVO, index=False)
+
+# ===============================
+# CARREGAR DADOS
+# ===============================
+df = pd.read_csv(ARQUIVO)
+df["data"] = pd.to_datetime(df["data"])
+
+# ===============================
+# FORMULÁRIO DE CADASTRO (PASSO 1)
+# ===============================
+st.subheader("➕ Novo Registro")
+
+with st.form("form_registro"):
+    data = st.date_input("📅 Data", value=date.today())
+    tipo = st.selectbox("Tipo", ["abastecimento", "manutencao"])
+    km = st.number_input("📏 Km rodados", min_value=0.0, step=1.0)
+    litros = st.number_input("⛽ Litros", min_value=0.0, step=0.1)
+    valor = st.number_input("💰 Valor (R$)", min_value=0.0, step=1.0)
+    descricao = st.text_input("📝 Descrição (opcional)")
+
+    salvar = st.form_submit_button("Salvar Registro")
+
+if salvar:
+    novo = pd.DataFrame([{
+        "data": data,
+        "km": km,
+        "litros": litros,
+        "valor": valor,
+        "tipo": tipo,
+        "descricao": descricao
+    }])
+
+    df = pd.concat([df, novo], ignore_index=True)
+    df.to_csv(ARQUIVO, index=False)
+
+    st.success("✅ Registro salvo com sucesso!")
+    st.rerun()
+
+# ===============================
+# MÉTRICAS (CARDS)
+# ===============================
+st.subheader("📊 Resumo Geral")
+
+col1, col2 = st.columns(2)
+
+km_total = df["km"].sum()
+gasto_total = df["valor"].sum()
+
+if df["litros"].sum() > 0:
+    consumo_medio = df["km"].sum() / df["litros"].sum()
+else:
+    consumo_medio = 0
+
+with col1:
+    st.metric("📏 Km Rodados", f"{km_total:.0f} km")
+
+with col2:
+    st.metric("💰 Gasto Total", f"R$ {gasto_total:,.2f}")
+
+st.metric("⛽ Consumo Médio", f"{consumo_medio:.1f} km/l")
+
+# ===============================
+# GRÁFICOS (MOBILE-FRIENDLY)
+# ===============================
+st.subheader("📈 Evolução")
+
+if not df.empty:
+    st.line_chart(df.groupby("data")["km"].sum())
+    st.bar_chart(df.groupby("data")["valor"].sum())
+else:
+    st.info("Ainda não há dados suficientes para gráficos.")
+
+# ===============================
+# TABELA DE REGISTROS
+# ===============================
+st.subheader("📋 Histórico")
+st.dataframe(df.sort_values("data", ascending=False), use_container_width=True)
+
+# ===============================
+# EXPORTAR RELATÓRIO (PASSO 4)
+# ===============================
+st.subheader("⬇️ Exportar Relatório")
+
+csv = df.to_csv(index=False).encode("utf-8")
+
+st.download_button(
+    label="📥 Baixar CSV",
+    data=csv,
+    file_name="motoflow_relatorio.csv",
+    mime="text/csv"
+)
